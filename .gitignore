@@ -1,0 +1,10 @@
+# build artifacts
+*.exe
+*.obj
+*.o
+*.pdb
+*.ilk
+*.log
+*.output
+*.bat
+build/
