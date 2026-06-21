@@ -75,6 +75,21 @@ complex state z  →  Hermitian graph Hamiltonian H (topology + flux)  →  unit
 
 **32 substrate/GNN contracts — all green.**
 
+### Real data — Cora citation graph (2708 nodes, 5429 edges, 7 classes), weights-free
+| method | naive | + decorrelation |
+|---|---|---|
+| own features (no message passing) | 58.3% | 58.6% |
+| FLOW 1-hop | 74.6% | 74.8% |
+| FLOW 2-hop | **77.4%** | 77.9% |
+
+20 labels/class, test = 2568 nodes. No weights, no backprop (prototypes = class
+means, G⁻¹ = the prototype Gram, FLOW = graph aggregation). The own-features 58.3%
+matches the known raw-feature reference (~59%); message passing lifts it to **77.4%**,
+beating label-propagation (~68%) and approaching the **trained** GCN (~81.5%) — with
+no trained parameters. (Decorrelation is marginal on Cora because its classes are
+only mildly correlated; it is decisive in the binding/high-correlation regime where
+naive routing collapses to 0.48, see `research/probe_whiten.cpp`.) Code: `research/probe_cora.cpp`.
+
 ## Layout
 
 - `tools/` — the substrate core (`graph_wave_substrate.hpp`) and the contract tests

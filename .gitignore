@@ -8,3 +8,4 @@
 *.output
 *.bat
 build/
+data/
