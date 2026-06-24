@@ -41,3 +41,13 @@ kept on purpose; they mark the dead-ends so they are not re-walked.
 | `probe_holoclf` | diffractive matched-filter classifier — **focus-limited**, principle exact / realization weak |
 | `probe_depth_close`, `probe_settle_route` | single Born / settling **do not** close the correlated-content gap |
 | `probe_gnn_prod`, `probe_pipeline`, `probe_pipeline2` | scaled synthetic pipelines — message passing helps (13%→100%) but the synthetic tasks were either trivial or regime-mismatched; superseded by `probe_cora` on real data |
+
+## Wave-physics audit
+| file | result |
+|---|---|
+| `probe_wave_fidelity` | faithful wave: norm/energy/time-reversal/gauge/continuity ~1e-15; light cone respected by Chebyshev, broken by large-step Cayley |
+| `probe_wave_complete` | superposition/homogeneity exact; Parseval complete (reconstruction 4e-13); energy by top-K modes 45/71/92/100% -> `<100%` results were partial energy collection, not lost info |
+
+See `docs/WAVE_FIDELITY.md`. This supersedes the earlier "phase channel is weak"
+note (commit 4534038): the phase carries 100% of the information; weak readings were
+partial/real-projected collection.
