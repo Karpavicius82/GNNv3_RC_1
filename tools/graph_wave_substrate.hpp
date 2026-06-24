@@ -73,6 +73,113 @@ inline Vec matvec(const CMat& m, const Vec& x) { int n = (int)m.size(); Vec o(n,
 inline double unitErr(const CMat& m) { int n = (int)m.size(); CMat g = matmul(dagger(m), m); double e = 0;
  for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) e = std::max(e, std::abs(g[i][j] - (i == j ? cd(1, 0) : cd(0, 0)))); return e; }
 inline double power(const Vec& z) { double s = 0; for (auto& v : z) s += std::norm(v); return s; }
+inline Vec normalized(Vec z) { double n = std::sqrt(power(z)) + 1e-300; for (auto& v : z) v /= n; return z; }
+inline void normalizeInPlace(Vec& z) { double n = std::sqrt(power(z)) + 1e-300; for (auto& v : z) v /= n; }
+inline double participationRatio(const Vec& z) { double a = 0, b = 0; for (auto& v : z) { double p = std::norm(v); a += p; b += p * p; } return a * a / (b + 1e-300); }
+inline CMat normalizedHopping(CMat h) {
+ double m = 0;
+ for (const auto& row : h) for (const auto& z : row) m = std::max(m, std::abs(z));
+ if (m < 1e-300) return h;
+ for (auto& row : h) for (auto& z : row) z /= m;
+ return h;
+}
+
+// ---- nonlinear Kerr / self-focusing evolution
+// Split-step discrete nonlinear Schrodinger flow:
+//   i psi_dot = -H psi - g |psi|^2 psi
+// This is substrate physics, not a trainer: half linear Cayley hop, local nonlinear
+// phase rotation from the field's own intensity, half linear Cayley hop.
+struct KerrStepper {
+ double g = 0.0, dt = 0.0;
+ Stepper half;
+ void build(CMat h, double dt_, double g_, bool normalize_hopping = true) {
+  g = g_; dt = dt_;
+  if (normalize_hopping) h = normalizedHopping(std::move(h));
+  half.build(h, dt / 2.0);
+ }
+ Vec step(Vec psi) const {
+  psi = half.step(psi);
+  if (g != 0.0) for (auto& v : psi) v *= std::exp(cd(0, -g * std::norm(v) * dt));
+  psi = half.step(psi);
+  return psi;
+ }
+ Vec evolve(Vec psi, int steps) const { for (int s = 0; s < steps; ++s) psi = step(std::move(psi)); return psi; }
+};
+
+// ---- matrix-free local Kerr flow
+// This is the streaming/native path: no dense H, no matrix multiply, no LU.
+// The field moves by local beam-splitter rotations on already-existing bonds,
+// while density writes a local nonlinear phase. Energy stays in the field; the
+// only change is where it is concentrated.
+struct SparseBond {
+ int a = 0, b = 0;
+ double w = 0.0;
+};
+struct LocalFlowStats {
+ long long bond_visits = 0;
+ double current_abs = 0.0;
+ double max_bond_speed = 0.0;
+};
+inline double bondCurrent(cd a, cd b, double w) {
+ return 2.0 * w * std::imag(std::conj(a) * b);
+}
+// One bond's slice of the unitary hop exp(-i theta (|a><b| + |b><a|)), i.e. the
+// SAME convention as Stepper's e^{-iHt}: na = cos a - i sin b. (The earlier +i sin
+// was the time-reversed e^{+iHt}, which put the Kerr term in the defocusing regime
+// and disagreed with the rest of the substrate.)
+inline void rotateBond(cd& a, cd& b, double theta) {
+ const double c = std::cos(theta), s = std::sin(theta);
+ const cd ia(0, -s);
+ cd na = c * a + ia * b;
+ cd nb = c * b + ia * a;
+ a = na;
+ b = nb;
+}
+// DNLS Hamiltonian energy on a bond list: E = -sum_bonds 2 w Re(conj a b) - (g/2) sum |psi|^4.
+// The split-step flow is symplectic, so E stays bounded (no secular drift) while the wave
+// self-focuses -- this is the "energy pressure" of the collapse made measurable and shown
+// lossless, rather than an ad-hoc density slowdown grafted onto the hop.
+inline double kerrEnergy(const Vec& psi, const std::vector<SparseBond>& bonds, double g) {
+ double hop = 0.0, quartic = 0.0;
+ for (const auto& e : bonds) hop += e.w * std::real(std::conj(psi[e.a]) * psi[e.b]);
+ for (const auto& v : psi) { double p = std::norm(v); quartic += p * p; }
+ return -2.0 * hop - 0.5 * g * quartic;
+}
+inline Vec edgeLocalKerrFlow(Vec psi, const std::vector<SparseBond>& bonds,
+                             double dt, double g, int steps,
+                             LocalFlowStats* stats = nullptr) {
+ double max_w = 0.0;
+ for (const auto& e : bonds) max_w = std::max(max_w, std::abs(e.w));
+ const double inv = max_w > 1e-300 ? 1.0 / max_w : 0.0;
+ for (int s = 0; s < steps; ++s) {
+  for (const auto& e : bonds) {
+   const double w = e.w * inv;
+   if (stats) {
+    const double j = bondCurrent(psi[e.a], psi[e.b], w);
+    const double rho = std::norm(psi[e.a]) + std::norm(psi[e.b]) + 1e-300;
+    stats->current_abs += std::abs(j);
+    stats->max_bond_speed = std::max(stats->max_bond_speed, std::abs(j) / rho);
+    stats->bond_visits++;
+   }
+   rotateBond(psi[e.a], psi[e.b], 0.5 * dt * w);
+  }
+  if (g != 0.0) {
+   for (auto& v : psi) v *= std::exp(cd(0, -g * std::norm(v) * dt));
+  }
+  for (const auto& e : bonds) {
+   const double w = e.w * inv;
+   if (stats) {
+    const double j = bondCurrent(psi[e.a], psi[e.b], w);
+    const double rho = std::norm(psi[e.a]) + std::norm(psi[e.b]) + 1e-300;
+    stats->current_abs += std::abs(j);
+    stats->max_bond_speed = std::max(stats->max_bond_speed, std::abs(j) / rho);
+    stats->bond_visits++;
+   }
+   rotateBond(psi[e.a], psi[e.b], 0.5 * dt * w);
+  }
+ }
+ return psi;
+}
 
 // ---- orthonormal-row kernel construction (fan-in / message materialization)
 inline cd rinner(const Vec& a, const Vec& b) { cd s(0, 0); for (size_t i = 0; i < a.size(); ++i) s += a[i] * std::conj(b[i]); return s; }
