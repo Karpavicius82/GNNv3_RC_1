@@ -115,7 +115,7 @@ int main() {
 
   std::printf("=====================================================================\n");
   std::printf("  GRAPH-WAVE HORIZON / DENSIFICATION CONTRACT  (N=%d, g=%.0f)\n", N, g);
-  std::printf("  Kerr self-focusing + holographic horizon + current detector + control\n");
+  std::printf("  Kerr self-focusing + dispersion horizon + current detector + control\n");
   std::printf("=====================================================================\n");
 
   int pass = 0, total = 0;
@@ -148,11 +148,10 @@ int main() {
   }
 
   // [3] BOUNDARY CURRENT / FLUX SURVIVES densification ------------------------
-  // A boosted packet carries a directed flux. Densification must not SCRAMBLE it.
-  // (On a lattice the current is velocity-weighted, sum 2 sin(k)|a_k|^2; only the
-  // quasi-momentum sum k|a_k|^2 is exactly conserved -- and reading that needs
-  // k-space, which we refuse. So the honest physical claim is the directed flux
-  // SURVIVES: same sign, still a large fraction -- not scrambled to noise.)
+  // A boosted packet carries a directed flux. We MEASURE the net current before and
+  // after self-focusing and ask one physical question: does the densified state
+  // still flow the same way, with comparable strength -- i.e. did densification keep
+  // the flux, or scramble it to noise? (We claim survival, not exact conservation.)
   std::printf("\n[3] FLUX SURVIVES densification (directed, same sign, not scrambled)\n");
   Vec boostedSol;
   {
@@ -168,24 +167,19 @@ int main() {
   }
 
   // [4] PHASE-PRESERVING DETECTOR: current reads PHASE, not amplitude ----------
-  // Two states with IDENTICAL |psi|^2 but different phase give different flux.
-  // A single random scramble has a ~sqrt(N) random-walk residual; the physical
-  // statement is the ENSEMBLE: phase-random states carry ZERO mean flux, while
-  // the coherent soliton carries a definite directed flux. Phase IS the carrier.
-  std::printf("\n[4] DETECTOR IS PHASE-PRESERVING (random-phase ensemble: mean flux -> 0)\n");
+  // A clean, single-shot physical test: time-reverse the field (psi -> conj psi).
+  // The intensity |psi|^2 is byte-for-byte identical, but time reversal flips the
+  // direction of flow, so the measured current must NEGATE exactly. Same amplitude,
+  // opposite flux -> the flux lives in the PHASE, not the amplitude. No ensemble.
+  std::printf("\n[4] DETECTOR IS PHASE-PRESERVING (time-reverse: same |psi|^2, flux negates)\n");
   {
-    double jReal = totalCurrent(boostedSol);
-    std::mt19937 rng(11); std::uniform_real_distribution<double> ph(-gw::kPi, gw::kPi);
-    const int SEEDS = 512; double meanJ = 0.0;
-    for (int s = 0; s < SEEDS; ++s) {
-      Vec scr(N);
-      for (int i = 0; i < N; ++i) scr[i] = std::polar(std::abs(boostedSol[i]), ph(rng));  // keep rho, random phase
-      meanJ += totalCurrent(scr);
-    }
-    meanJ /= SEEDS;
-    std::printf("    coherent flux=%.4f   phase-random ensemble mean flux=%.4f  (same |psi|^2)\n", jReal, meanJ);
+    double jFwd = totalCurrent(boostedSol);
+    Vec rev(N); double dRho = 0.0;
+    for (int i = 0; i < N; ++i) { rev[i] = std::conj(boostedSol[i]); dRho = std::max(dRho, std::abs(std::norm(rev[i]) - std::norm(boostedSol[i]))); }
+    double jRev = totalCurrent(rev);
+    std::printf("    forward flux=%.4f   time-reversed flux=%.4f   max d|psi|^2=%.1e\n", jFwd, jRev, dRho);
     ++total; pass += report("current detector responds to amplitude, not phase",
-                            std::abs(meanJ) < 0.1 * std::abs(jReal));
+                            std::abs(jFwd) > 0.05 && dRho < 1e-15 && std::abs(jRev + jFwd) < 1e-12);
   }
 
   // [5] LOCAL APERTURE READOUT (a horizon), not a global scan ------------------
@@ -218,57 +212,57 @@ int main() {
 
   // [7] CAPACITY HORIZON, IN THE WAVE ITSELF -----------------------------------
   // K items packed into ONE dense carrier: each item is a localized bump given a
-  // distinct MOMENTUM k_j (its physical address). Superposed at one place, they are
-  // the dense code (the horizon). Then the substrate's OWN DISPERSION sorts them in
-  // space -- different momenta travel at different group velocities v(k) = -2 sin k
-  // (the prism / Hawking-emission picture) -- and an aperture reads each channel.
-  // RESOLUTION criterion (read purely from aperture energies, Rayleigh-like): item j
-  // is resolved iff its aperture energy exceeds the energy at the MIDPOINTS to its
-  // neighbours. As K grows the channels crowd past the band+aperture resolution, the
-  // peaks merge into the midpoints, and recall sinks to the floor -- the horizon.
-  std::printf("\n[7] CAPACITY HORIZON in the wave (dispersion sorts momenta; apertures read)\n");
+  // distinct momentum (its physical address). Superposed at one place, they are the
+  // dense code (the horizon). The substrate's OWN dispersion then sorts them in space
+  // as it streams -- the prism / Hawking-emission picture. We do NOT compute where
+  // each channel lands; the wave decides. We READ by sliding a finite aperture across
+  // the field and COUNTING the resolved energy peaks. How many distinct peaks the
+  // wave can show IS the capacity: as K grows the channels crowd and the peaks merge,
+  // so the count saturates and resolved/K collapses -- the horizon, read off the wave.
+  std::printf("\n[7] CAPACITY HORIZON in the wave (dispersion sorts; count peaks off the field)\n");
   {
     const int LN = 1024, lx0 = LN / 2, lR = 4, M = 200;
     const double ldt = 0.3, sigma = 7.0, kLo = -1.3, kHi = 1.3;
     gw::Graph L(LN); for (int i = 0; i + 1 < LN; ++i) L.addEdge(i, i + 1, 1.0);   // open line
     gw::Stepper LU; LU.build(L.h, ldt);
 
-    // returns {recall (fraction Rayleigh-resolved), mean peak/midpoint contrast}.
-    // contrast -> 1 is the floor: peak == midpoint == fully merged (unreadable).
-    auto horizon = [&](int K) {
+    auto countPeaks = [&](int K) {
       Vec psi(LN, cd(0, 0));
-      std::vector<int> c(K);
       for (int j = 0; j < K; ++j) {
-        double kj = (K == 1) ? 0.0 : kLo + (kHi - kLo) * j / (K - 1);
-        double vj = -2.0 * std::sin(kj);                       // group velocity -> where channel j emerges
-        c[j] = (int)std::lround(lx0 + vj * (M * ldt));
+        double kj = (K == 1) ? 0.0 : kLo + (kHi - kLo) * j / (K - 1);   // momentum address (state PREP only)
         for (int x = 0; x < LN; ++x) { double d = x - lx0; psi[x] += std::exp(cd(-d * d / (2 * sigma * sigma), kj * x)); }
       }
       psi = normalize(psi);
-      for (int s = 0; s < M; ++s) psi = LU.step(psi);          // STREAM: dispersion sorts the momenta
-      std::sort(c.begin(), c.end());
-      int resolved = 0; double sumC = 0.0;
-      for (int j = 0; j < K; ++j) {
-        double ej = apertureEnergy(psi, c[j], lR);
-        double mid = 0.0; int nb = 0;
-        if (j > 0)     { mid += apertureEnergy(psi, (c[j-1] + c[j]) / 2, lR); ++nb; }
-        if (j < K - 1) { mid += apertureEnergy(psi, (c[j] + c[j+1]) / 2, lR); ++nb; }
-        double midE = (nb ? mid / nb : 1e-300);
-        double contrast = ej / (midE + 1e-300);
-        sumC += contrast;
-        if (contrast > 1.5) ++resolved;                        // Rayleigh-resolved
+      for (int s = 0; s < M; ++s) psi = LU.step(psi);          // STREAM: dispersion sorts the momenta in space
+      // READ: slide the aperture across the field, record the energy profile
+      const int lo = lx0 - 160, hi = lx0 + 160;
+      std::vector<double> E(hi - lo + 1);
+      double maxE = 0.0;
+      for (int x = lo; x <= hi; ++x) { double e = apertureEnergy(psi, x, lR); E[x - lo] = e; maxE = std::max(maxE, e); }
+      // COUNT resolved peaks: strict local maxima over the aperture width, above a
+      // floor fraction of the brightest channel, separated by at least the aperture.
+      int peaks = 0, last = -1000;
+      for (int x = lo + lR; x <= hi - lR; ++x) {
+        double e = E[x - lo];
+        if (e < 0.18 * maxE) continue;
+        bool top = true;
+        for (int d = -lR; d <= lR; ++d) if (E[x + d - lo] > e + 1e-15) { top = false; break; }
+        if (top && (x - last) >= lR) { ++peaks; last = x; }
       }
-      return std::make_pair((double)resolved / K, sumC / K);
+      return peaks;
     };
 
+    int pkLo = 0, pkHi = 0;
     for (int K : {3, 5, 7, 9, 12, 16, 24, 48}) {
-      auto [rec, ctr] = horizon(K);
-      std::printf("    K=%2d : recall=%5.1f%%  mean peak/midpoint contrast=%.2f  (floor=1.0)\n", K, 100 * rec, ctr);
+      int pk = countPeaks(K);
+      std::printf("    K=%2d : peaks read off the wave = %2d   (resolved %5.1f%%)\n", K, pk, 100.0 * pk / K);
+      if (K == 3) pkLo = pk;
+      if (K == 48) pkHi = pk;
     }
-    auto [recLo, ctrLo] = horizon(4);
-    auto [recHi, ctrHi] = horizon(48);
-    ++total; pass += report("no wave capacity horizon: resolution does not collapse with load",
-                            recLo > 0.99 && recHi < 0.4 && ctrHi < 0.5 * ctrLo);
+    // horizon: at small load every item shows as its own peak; at heavy load the
+    // peak count saturates far below K (the wave cannot resolve them) -> resolved/K collapses.
+    ++total; pass += report("no wave capacity horizon: peak count does not saturate below load",
+                            pkLo == 3 && pkHi < 16 && (double)pkHi / 48 < 0.5 * ((double)pkLo / 3));
   }
 
   // [8] RADIATION ACCOUNTED, not ignored --------------------------------------
