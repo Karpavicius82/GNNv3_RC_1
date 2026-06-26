@@ -113,6 +113,23 @@ inline double pairPhase(const Vec& f, int n, int a, int b) {
  }
  return 2 * kPi * best / M;
 }
+// POLAR magnitude of the same joint coherence: how BRIGHT the fringe peaks (=
+// the length of the (XX,XY) coherence vector, read without ever forming the
+// Cartesian components). Together (pairMag, pairPhase) = the full polar coherence.
+inline double pairMag(const Vec& f, int n, int a, int b) {
+ double best = -2; const int M = 720;
+ for (int k = 0; k < M; ++k) {
+  const double th = 2 * kPi * k / M;
+  const double s = expectPair(rzAngle(f, n, a, th), n, a, 'X', b, 'X');
+  if (s > best) best = s;
+ }
+ return best;
+}
+// polar distance between two joint coherences (M1,phi1) and (M2,phi2): the law of
+// cosines = |z1 - z2| computed in POLAR form (no Cartesian decomposition).
+inline double polarCoherenceDist(double m1, double p1, double m2, double p2) {
+ return std::sqrt(std::max(0.0, m1 * m1 + m2 * m2 - 2 * m1 * m2 * std::cos(p1 - p2)));
+}
 
 // ---- physical two-qubit entangler: a diagonal pi-flux on the (bit a = bit b = 1)
 // node, grown by gw::Stepper. Like the XY-coupling test, entanglement is GENERATED
