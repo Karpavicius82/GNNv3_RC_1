@@ -16,6 +16,7 @@
 #include <complex>
 #include <cstddef>
 #include <random>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 namespace gw {
@@ -208,6 +209,27 @@ inline double kerrEnergy(const Vec& psi, const std::vector<SparseBond>& bonds, d
  for (const auto& e : bonds) hop += e.w * std::real(std::conj(psi[e.a]) * e.phase_u * psi[e.b]);
  for (const auto& v : psi) { double p = std::norm(v); quartic += p * p; }
  return -2.0 * hop - 0.5 * g * quartic;
+}
+inline double fieldPower(const std::unordered_map<int, cd>& f) {
+ double s = 0.0;
+ for (const auto& kv : f) s += std::norm(kv.second);
+ return s;
+}
+inline cd fieldOverlap(const std::unordered_map<int, cd>& a,
+                       const std::unordered_map<int, cd>& b) {
+ cd s(0.0, 0.0);
+ for (const auto& kv : a) {
+  auto it = b.find(kv.first);
+  if (it != b.end()) s += std::conj(kv.second) * it->second;
+ }
+ return s;
+}
+inline double fieldCoherence(const std::unordered_map<int, cd>& a,
+                             const std::unordered_map<int, cd>& b,
+                             cd* raw_overlap = nullptr) {
+ cd z = fieldOverlap(a, b);
+ if (raw_overlap) *raw_overlap = z;
+ return std::abs(z) / (std::sqrt(fieldPower(a) * fieldPower(b)) + 1e-300);
 }
 inline Vec edgeLocalKerrFlow(Vec psi, const std::vector<SparseBond>& bonds,
                              double dt, double g, int steps,
