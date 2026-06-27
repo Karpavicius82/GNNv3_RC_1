@@ -50,6 +50,7 @@ constexpr int kStepsPerToken = 2;
 
 struct Edge {
   double w = 0.0;
+  double phase = 0.0;
   int last = 0;
 };
 
@@ -84,6 +85,48 @@ struct Graph {
   void eraseEdge(int a, int b) {
     adj[a].erase(b);
     adj[b].erase(a);
+  }
+
+  static double wrapPhase(double x) {
+    while (x > gw::kPi) x -= 2.0 * gw::kPi;
+    while (x < -gw::kPi) x += 2.0 * gw::kPi;
+    return x;
+  }
+
+  bool hasEdge(int a, int b) const {
+    return adj[a].find(b) != adj[a].end();
+  }
+
+  double orientedPhase(int u, int v) const {
+    auto it = adj[u].find(v);
+    if (it == adj[u].end()) return 0.0;
+    return u < v ? it->second.phase : -it->second.phase;
+  }
+
+  void addSignedPhase(int u, int v, double dphi) {
+    auto it = adj[u].find(v);
+    if (it == adj[u].end()) return;
+    Edge e = it->second;
+    const double sign = u < v ? 1.0 : -1.0;
+    e.phase = std::clamp(wrapPhase(e.phase + sign * dphi), -1.4, 1.4);
+    adj[u][v] = e;
+    adj[v][u] = e;
+  }
+
+  void addPlaquetteFlux(int a, int b, int c) {
+    constexpr double dphi = 0.018;
+    addSignedPhase(a, b, dphi / 3.0);
+    addSignedPhase(b, c, dphi / 3.0);
+    addSignedPhase(c, a, dphi / 3.0);
+  }
+
+  void closePlaquettes(int node) {
+    for (int j = 1; j < (int)win.size(); ++j) {
+      for (int i = 0; i < j; ++i) {
+        int a = win[i], b = win[j];
+        if (hasEdge(a, b) && hasEdge(a, node) && hasEdge(b, node)) addPlaquetteFlux(a, b, node);
+      }
+    }
   }
 
   void relaxNode(int a) {
@@ -200,7 +243,7 @@ std::vector<gw::SparseBond> bondsInLightCone(const Graph& g, const std::vector<i
     int u = nodes[i];
     for (const auto& kv : g.adj[u]) {
       auto it = idx.find(kv.first);
-      if (it != idx.end() && i < it->second) bonds.push_back({i, it->second, kv.second.w});
+      if (it != idx.end() && i < it->second) bonds.push_back({i, it->second, kv.second.w, g.orientedPhase(u, kv.first)});
     }
   }
   return bonds;
@@ -224,9 +267,8 @@ UpdateStats evolveLocalField(Graph& g, int src, Memory& mem) {
   std::vector<gw::SparseBond> bonds = bondsInLightCone(g, nodes, idx);
   Vec lin = project(mem.lin, nodes, idx, src);
   Vec ker = project(mem.ker, nodes, idx, src);
-  gw::LocalFlowStats linStats, kerStats;
-  lin = gw::edgeLocalKerrFlow(std::move(lin), bonds, kDt, 0.0, kStepsPerToken, &linStats);
-  ker = gw::edgeLocalKerrFlow(std::move(ker), bonds, kDt, kG, kStepsPerToken, &kerStats);
+  gw::LocalFlowStats kerStats;
+  gw::edgeLocalKerrFlowPair(lin, ker, bonds, kDt, kG, kStepsPerToken, &kerStats);
   gw::normalizeInPlace(lin);
   gw::normalizeInPlace(ker);
 
@@ -238,7 +280,7 @@ UpdateStats evolveLocalField(Graph& g, int src, Memory& mem) {
 
   s.prLin = mem.prLin;
   s.prKer = mem.prKer;
-  s.ops = linStats.bond_visits + kerStats.bond_visits;
+  s.ops = (long long)bonds.size() * kStepsPerToken * 2 + kerStats.bond_visits;
   s.maxPhaseSpeed = kerStats.max_bond_speed;
   s.stableDense = ((int)g.adj[src].size() >= kTopK) && g.incident(src) >= kWMin && g.seen[src] >= kSMin;
   // horizon = collapse beats dispersion: nonlinear PR below half its own linear control.
@@ -300,6 +342,7 @@ struct System {
       g.relaxNode(c);
       g.touch(node, randomize ? randomEndpoint(node, c) : c);
     }
+    g.closePlaquettes(node);
     g.win.push_back(node);
     if ((int)g.win.size() > kWindow) g.win.pop_front();
 

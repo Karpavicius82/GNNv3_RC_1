@@ -111,79 +111,147 @@ struct KerrStepper {
 // The field moves by local beam-splitter rotations on already-existing bonds,
 // while density writes a local nonlinear phase. Energy stays in the field; the
 // only change is where it is concentrated.
-struct SparseBond {
- int a = 0, b = 0;
- double w = 0.0;
-};
 struct LocalFlowStats {
  long long bond_visits = 0;
  double current_abs = 0.0;
  double max_bond_speed = 0.0;
 };
-inline double bondCurrent(cd a, cd b, double w) {
- return 2.0 * w * std::imag(std::conj(a) * b);
+inline cd bondPhase(double phase) {
+ return phase == 0.0 ? cd(1.0, 0.0) : std::exp(cd(0.0, phase));
 }
+struct SparseBond {
+ int a = 0, b = 0;
+ double w = 0.0;
+ double phase = 0.0;
+ cd phase_u = cd(1.0, 0.0);
+ SparseBond() = default;
+ SparseBond(int a_, int b_, double w_, double phase_ = 0.0)
+   : a(a_), b(b_), w(w_), phase(phase_), phase_u(bondPhase(phase_)) {}
+};
+inline double bondCurrent(cd a, cd b, double w, double phase = 0.0) {
+ return 2.0 * w * std::imag(std::conj(a) * bondPhase(phase) * b);
+}
+inline double bondCurrentU(cd a, cd b, double w, cd phase_u) {
+ return 2.0 * w * std::imag(std::conj(a) * phase_u * b);
+}
+struct LocalFlowBond {
+ int a = 0, b = 0;
+ double w = 0.0;
+ double c = 1.0;
+ cd neg_i_s_phase = cd(0.0, 0.0);
+ cd neg_i_s_conj_phase = cd(0.0, 0.0);
+ cd phase_u = cd(1.0, 0.0);
+};
+struct LocalFlowCarrier {
+ std::vector<LocalFlowBond> bonds;
+ explicit LocalFlowCarrier(const std::vector<SparseBond>& src, double dt) {
+  double max_w = 0.0;
+  for (const auto& e : src) max_w = std::max(max_w, std::abs(e.w));
+  const double inv = max_w > 1e-300 ? 1.0 / max_w : 0.0;
+  bonds.reserve(src.size());
+  for (const auto& e : src) {
+   const double w = e.w * inv;
+   const double theta = 0.5 * dt * w;
+   const double c = std::cos(theta);
+   const cd ns(0.0, -std::sin(theta));
+   bonds.push_back({e.a, e.b, w, c, ns * e.phase_u, ns * std::conj(e.phase_u), e.phase_u});
+  }
+ }
+};
 // One bond's slice of the unitary hop exp(-i theta (|a><b| + |b><a|)), i.e. the
 // SAME convention as Stepper's e^{-iHt}: na = cos a - i sin b. (The earlier +i sin
 // was the time-reversed e^{+iHt}, which put the Kerr term in the defocusing regime
 // and disagreed with the rest of the substrate.)
-inline void rotateBond(cd& a, cd& b, double theta) {
+inline void rotateBond(cd& a, cd& b, double theta, double phase = 0.0) {
  const double c = std::cos(theta), s = std::sin(theta);
  const cd ia(0, -s);
- cd na = c * a + ia * b;
- cd nb = c * b + ia * a;
+ const cd hopAB = bondPhase(phase);
+ const cd hopBA = std::conj(hopAB);
+ cd na = c * a + ia * hopAB * b;
+ cd nb = c * b + ia * hopBA * a;
  a = na;
  b = nb;
 }
-// DNLS Hamiltonian energy on a bond list: E = -sum_bonds 2 w Re(conj a b) - (g/2) sum |psi|^4.
+inline void rotateCompiledBond(cd& a, cd& b, const LocalFlowBond& e) {
+ cd na = e.c * a + e.neg_i_s_phase * b;
+ cd nb = e.c * b + e.neg_i_s_conj_phase * a;
+ a = na;
+ b = nb;
+}
+inline void observeCompiledBond(const Vec& psi, const LocalFlowBond& e, LocalFlowStats* stats) {
+ if (!stats) return;
+ const double j = bondCurrentU(psi[e.a], psi[e.b], e.w, e.phase_u);
+ const double rho = std::norm(psi[e.a]) + std::norm(psi[e.b]) + 1e-300;
+ stats->current_abs += std::abs(j);
+ stats->max_bond_speed = std::max(stats->max_bond_speed, std::abs(j) / rho);
+ stats->bond_visits++;
+}
+inline void applyKerrPhase(Vec& psi, double dt, double g) {
+ if (g != 0.0) for (auto& v : psi) v *= std::exp(cd(0, -g * std::norm(v) * dt));
+}
+inline void rotateBondU(cd& a, cd& b, double theta, cd phase_u) {
+ const double c = std::cos(theta), s = std::sin(theta);
+ const cd ia(0, -s);
+ const cd hopBA = std::conj(phase_u);
+ cd na = c * a + ia * phase_u * b;
+ cd nb = c * b + ia * hopBA * a;
+ a = na;
+ b = nb;
+}
+// DNLS Hamiltonian energy on a bond list:
+// E = -sum_bonds 2 w Re(conj(a) exp(i phase_ab) b) - (g/2) sum |psi|^4.
 // The split-step flow is symplectic, so E stays bounded (no secular drift) while the wave
 // self-focuses -- this is the "energy pressure" of the collapse made measurable and shown
 // lossless, rather than an ad-hoc density slowdown grafted onto the hop.
 inline double kerrEnergy(const Vec& psi, const std::vector<SparseBond>& bonds, double g) {
  double hop = 0.0, quartic = 0.0;
- for (const auto& e : bonds) hop += e.w * std::real(std::conj(psi[e.a]) * psi[e.b]);
+ for (const auto& e : bonds) hop += e.w * std::real(std::conj(psi[e.a]) * e.phase_u * psi[e.b]);
  for (const auto& v : psi) { double p = std::norm(v); quartic += p * p; }
  return -2.0 * hop - 0.5 * g * quartic;
 }
 inline Vec edgeLocalKerrFlow(Vec psi, const std::vector<SparseBond>& bonds,
                              double dt, double g, int steps,
                              LocalFlowStats* stats = nullptr) {
- double max_w = 0.0;
- for (const auto& e : bonds) max_w = std::max(max_w, std::abs(e.w));
- const double inv = max_w > 1e-300 ? 1.0 / max_w : 0.0;
+ LocalFlowCarrier carrier(bonds, dt);
  for (int s = 0; s < steps; ++s) {
-  for (const auto& e : bonds) {
-   const double w = e.w * inv;
-   if (stats) {
-    const double j = bondCurrent(psi[e.a], psi[e.b], w);
-    const double rho = std::norm(psi[e.a]) + std::norm(psi[e.b]) + 1e-300;
-    stats->current_abs += std::abs(j);
-    stats->max_bond_speed = std::max(stats->max_bond_speed, std::abs(j) / rho);
-    stats->bond_visits++;
-   }
-   rotateBond(psi[e.a], psi[e.b], 0.5 * dt * w);
+  for (const auto& e : carrier.bonds) {
+   observeCompiledBond(psi, e, stats);
+   rotateCompiledBond(psi[e.a], psi[e.b], e);
   }
-  if (g != 0.0) {
-   for (auto& v : psi) v *= std::exp(cd(0, -g * std::norm(v) * dt));
-  }
+  applyKerrPhase(psi, dt, g);
   // SECOND half-step in REVERSE bond order: the whole step becomes a PALINDROME
   // around the Kerr phase -> symmetric (Strang) split, time-reversible and 2nd-order,
   // so each node's phase no longer drifts. (Same-order was 1st-order: per-node phase
   // error ~2.8 rad and a corrupted compression vs the truth; reversed is ~0.26 rad.)
-  for (auto it = bonds.rbegin(); it != bonds.rend(); ++it) {
+  for (auto it = carrier.bonds.rbegin(); it != carrier.bonds.rend(); ++it) {
    const auto& e = *it;
-   const double w = e.w * inv;
-   if (stats) {
-    const double j = bondCurrent(psi[e.a], psi[e.b], w);
-    const double rho = std::norm(psi[e.a]) + std::norm(psi[e.b]) + 1e-300;
-    stats->current_abs += std::abs(j);
-    stats->max_bond_speed = std::max(stats->max_bond_speed, std::abs(j) / rho);
-    stats->bond_visits++;
-   }
-   rotateBond(psi[e.a], psi[e.b], 0.5 * dt * w);
+   observeCompiledBond(psi, e, stats);
+   rotateCompiledBond(psi[e.a], psi[e.b], e);
   }
  }
  return psi;
+}
+inline void edgeLocalKerrFlowPair(Vec& lin, Vec& ker, const std::vector<SparseBond>& bonds,
+                                  double dt, double g_ker, int steps,
+                                  LocalFlowStats* ker_stats = nullptr,
+                                  LocalFlowStats* lin_stats = nullptr) {
+ LocalFlowCarrier carrier(bonds, dt);
+ for (int s = 0; s < steps; ++s) {
+  for (const auto& e : carrier.bonds) {
+   observeCompiledBond(lin, e, lin_stats);
+   rotateCompiledBond(lin[e.a], lin[e.b], e);
+   observeCompiledBond(ker, e, ker_stats);
+   rotateCompiledBond(ker[e.a], ker[e.b], e);
+  }
+  applyKerrPhase(ker, dt, g_ker);
+  for (auto it = carrier.bonds.rbegin(); it != carrier.bonds.rend(); ++it) {
+   const auto& e = *it;
+   observeCompiledBond(lin, e, lin_stats);
+   rotateCompiledBond(lin[e.a], lin[e.b], e);
+   observeCompiledBond(ker, e, ker_stats);
+   rotateCompiledBond(ker[e.a], ker[e.b], e);
+  }
+ }
 }
 
 // ---- orthonormal-row kernel construction (fan-in / message materialization)
