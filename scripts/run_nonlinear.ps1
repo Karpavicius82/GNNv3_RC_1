@@ -22,10 +22,21 @@ if (-not $VcVars -or -not (Test-Path $VcVars)) { Write-Host "FATAL: vcvars64.bat
 Write-Host "compiler env: $VcVars" -ForegroundColor DarkGray
 
 # --- 2. import the MSVC environment ONCE (so cl is on PATH for all builds) ----
+# Hardened against a PATH/Path case-duplicate (seen in container/CI envs): we UNION
+# every PATH-like entry case-insensitively, so the VC tools dir survives regardless
+# of which casing or dump order wins. (Reported by an independent Codex run.)
+$pathParts = @()
 cmd /c "call `"$VcVars`" >nul 2>&1 && set" | ForEach-Object {
-  if ($_ -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($matches[1])" -Value $matches[2] }
+  if ($_ -match '^([^=]+)=(.*)$') {
+    $k = $matches[1]; $v = $matches[2]
+    if ($k -ieq 'PATH') { $pathParts += ($v -split ';') } else { Set-Item -Path "env:$k" -Value $v }
+  }
 }
-if (-not (Get-Command cl -EA SilentlyContinue)) { Write-Host "FATAL: cl still not on PATH after vcvars" -ForegroundColor Red; exit 2 }
+if ($pathParts.Count) {
+  $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  $env:Path = (($pathParts | Where-Object { $_ -and $seen.Add($_) }) -join ';')
+}
+if (-not (Get-Command cl -EA SilentlyContinue)) { Write-Host "FATAL: cl still not on PATH after vcvars (check VC x64 tools installed)" -ForegroundColor Red; exit 2 }
 
 # --- 3. the nonlinear test set (file, kind, success check) --------------------
 # contracts return exit 0 on full pass; probes are checked by a metric in output.
