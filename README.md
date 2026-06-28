@@ -71,3 +71,29 @@ Everything is **weights-free** and verified by **exact finite-N identities**
 (unitarity, gauge invariance, exact interference) at machine precision — not by
 fitted exponents or asymptotic claims. Where a result is uncertain or a probe
 failed, that is recorded honestly rather than hidden.
+
+## GNNv3 RC1 checkpoint
+
+This repository now also contains the GNNv3 RC1 research checkpoint:
+
+- `tools/graph_wave_v3_feeling_gate_contract_test.cpp`
+- `docs/GNNv3_RC1_REPORT.md`
+
+GNNv3 RC1 tests a self-sensing carrier-field substrate where `chi/tau` narrows
+the active physics window. The main gate is C++ only, uses no trigonometric
+readout in the gate, and includes a signed-current/stress audit to detect phase
+clipping.
+
+Latest 1M RC1 result:
+
+```text
+adaptive feeling-gated:
+  active_pairs=0.631
+  psi compression=2.05x
+  chi compression=3.56x
+  sync_error=0
+  CONTRACT RESULT: 8 / 8 PASS
+```
+
+See `docs/GNNv3_RC1_REPORT.md` for commands, test matrix, negative results, and
+architecture notes.
