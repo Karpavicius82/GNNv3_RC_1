@@ -1,4 +1,4 @@
-# GNNv2 — a weights-free graph neural substrate
+# GNNv3 — a weights-free graph neural substrate
 
 A graph neural network built **without weights and without a trainer**. Computation
 is carried by **phase, interference and superposition** on a unitary graph-wave
