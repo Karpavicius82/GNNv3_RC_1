@@ -39,10 +39,9 @@ nothing is fitted.
 
 | path | contents |
 |---|---|
-| [`tools/`](tools/README.md) | substrate core (`graph_wave_substrate.hpp`) + 59 contract tests (physics, GNN grammar, the working GNN, memory, decision). 32 green at machine precision. |
+| [`tools/`](tools/README.md) | substrate core (`graph_wave_substrate.hpp`) + 61 C++ contract tests, including the GNNv3 RC1 feeling-gated carrier-field gate. |
 | [`research/`](research/README.md) | production studies (scaling engine, decorrelation glue, the Cora benchmark) and honest exploratory probes, including negative results. |
-| [`docs/`](docs/) | `ARCHITECTURE.md`, `RESULTS.md`. |
-| `scripts/` | `run_tests.ps1` — build and run every contract, print a pass/fail summary. |
+| [`docs/`](docs/) | architecture, results, physics-only discipline, RC1 report and handoff. |
 
 ## Build & run (Windows / MSVC)
 
@@ -53,16 +52,14 @@ cl /O2 /EHsc /std:c++20 /I tools tools\graph_wave_unitarity_test.cpp && graph_wa
 cl /O2 /EHsc /std:c++20 /I tools research\probe_sparse_scale.cpp       && probe_sparse_scale.exe
 ```
 
-Run the whole contract suite:
+CMake builds every contract and probe as a target and registers all C++ contracts
+with CTest:
 
 ```
-powershell -ExecutionPolicy Bypass -File scripts\run_tests.ps1
-```
-
-CMake (builds every contract and probe as a target) is also provided:
-
-```
-cmake -B build -S . && cmake --build build
+cmake -S . -B build
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure
 ```
 
 ## Principle
@@ -95,6 +92,13 @@ adaptive feeling-gated:
   chi compression=3.56x
   sync_error=0
   CONTRACT RESULT: 8 / 8 PASS
+```
+
+Latest CTest status:
+
+```text
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure  -> 1 / 1 passed
+ctest --test-dir build -C Release --output-on-failure -j 8      -> 61 / 61 passed
 ```
 
 See `docs/GNNv3_RC1_REPORT.md` for commands, test matrix, negative results, and

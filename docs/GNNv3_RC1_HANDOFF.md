@@ -116,6 +116,16 @@ phase audit:
 CONTRACT RESULT: 8 / 8 PASS
 ```
 
+Latest CTest status after CMake/CTest production cleanup:
+
+```text
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure
+1 / 1 passed
+
+ctest --test-dir build -C Release --output-on-failure -j 8
+61 / 61 passed
+```
+
 Meaning:
 
 - Heavy edge-flow interactions reduced by about 36.9%.
@@ -152,7 +162,16 @@ Bare drift coherence
 
 ## Verification Commands
 
-Use `cmd.exe` / MSVC x64:
+Use CMake / CTest first:
+
+```bat
+cmake -S . -B build
+cmake --build build --config Release --target graph_wave_v3_feeling_gate_contract_test
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure
+build\Release\graph_wave_v3_feeling_gate_contract_test.exe 1000000
+```
+
+Direct `cmd.exe` / MSVC x64 fallback:
 
 ```bat
 call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
@@ -160,7 +179,7 @@ cl /nologo /O2 /EHsc /std:c++20 tools\graph_wave_v3_feeling_gate_contract_test.c
 build\tmp_bridge\v3_feeling_gate.exe 1000000
 ```
 
-No Developer PowerShell runner is required for the project logic.
+No PowerShell runner is required for the project logic.
 
 ## Next Work
 

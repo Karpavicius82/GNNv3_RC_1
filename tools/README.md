@@ -4,7 +4,9 @@
 graph families, the unitary Cayley stepper, the orthonormal-row kernel, the
 eigensolver). Every other file is a **self-contained contract test**: it builds to a
 standalone executable that prints its own invariants and a `RESULT : n / n verified`
-line. A contract proves one property exactly, at machine precision.
+line. The repo currently has **61 C++ contract tests** registered through CTest; the
+GNNv3 RC1 carrier-field gate is labeled `gnnv3`. A contract proves one property
+exactly, at machine precision.
 
 Build any one (Windows / MSVC, Developer prompt):
 

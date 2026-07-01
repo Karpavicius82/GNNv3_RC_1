@@ -86,7 +86,16 @@ interactions by about 36.9%, and does not one-sidedly clip signed phase current.
 
 ## Verification Commands
 
-Run from repo root with MSVC x64 environment:
+Run from repo root:
+
+```bat
+cmake -S . -B build
+cmake --build build --config Release --target graph_wave_v3_feeling_gate_contract_test
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure
+build\Release\graph_wave_v3_feeling_gate_contract_test.exe 1000000
+```
+
+Direct MSVC x64 fallback:
 
 ```bat
 call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
@@ -117,6 +126,16 @@ build\tmp_bridge\probe_nonlinear_engine.exe 60000
 | `graph_wave_synchronous_phase_field_contract_test.cpp` | 1M | PASS 5/5 | `psi=2.97x`, `chi=3.61x` in prior run |
 | `graph_wave_dual_feeling_substrate_contract_test.cpp` | 60k | PASS 5/5 | `chi` readout 100% in prior run |
 | `probe_nonlinear_engine.cpp` | 60k | FAIL 3/4 | useful negative result: tau random separation weak |
+
+Current CMake/CTest status:
+
+```text
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure
+1 / 1 passed
+
+ctest --test-dir build -C Release --output-on-failure -j 8
+61 / 61 passed
+```
 
 ## Important Negative Results
 

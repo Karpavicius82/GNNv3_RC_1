@@ -1,6 +1,6 @@
 # Architecture
 
-GNNv2 is a graph neural network with **no weights and no trainer**. Computation is
+GNNv3 is a graph neural network substrate with **no weights and no trainer**. Computation is
 carried by **phase, interference and superposition** on a unitary graph-wave
 substrate. The only structure is the graph topology and the **gauge flux** on its
 edges; there are no stored, tuned numbers.
