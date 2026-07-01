@@ -70,9 +70,21 @@ approaching the **trained** GCN (~81.5%). Decorrelation is marginal on Cora beca
 its classes are only mildly correlated; it is decisive in the binding /
 high-correlation regime (`probe_whiten`, 1.000 vs 0.48). Source: `research/probe_cora.cpp`.
 
+## GNNv3 RC1 self-sensing substrate
+
+| contract | stream | active work | psi compression | chi compression | phase / sync |
+|---|---:|---:|---:|---:|---|
+| `graph_wave_v3_feeling_gate_contract_test` | 1M | 0.631 active pairs | 2.05x | 3.56x | skipped current bias 0.008, sync 0 |
+| `graph_wave_v3_self_sensing_medium_contract_test` | 1M | 0.572 active edges | 1.72x | 2.03x | skipped current bias 0.006, sync 0 |
+
+The self-sensing medium also reported internal support separation
+`psi=5.22`, `chi=9.24`. This is the key distinction: the system is not judged by
+copying the full all-edge trajectory, but by whether the field itself remains
+readable, bounded, synchronous and phase-balanced while reducing heavy flow.
+
 ## Summary
 
-- 61 / 61 C++ contract tests pass through CTest; GNNv3 RC1 has its own `gnnv3` label.
+- 62 / 62 C++ contract tests pass through CTest; GNNv3 RC1 has its own `gnnv3` label.
 - Engine scales to 10⁶ nodes, exact propagator, gauge-invariant, exact interference.
 - GNN: 100% classification, 99.5% weights-free learning, 77.4% on real Cora.
 - Decorrelation glue closes the correlated-content gap (1.000 where naive gives 0.48).

@@ -1,6 +1,7 @@
 # GNNv3 RC1 Technical Report
 
 Date: 2026-06-28
+Updated: 2026-07-01
 
 ## Scope
 
@@ -31,6 +32,15 @@ This test stores phase as a two-component carrier, not as an angle. The gate doe
 not call `sin`, `cos`, `atan2`, `wrap`, or `std::exp`. It observes local
 current/stress activity between transported carriers.
 
+The 2026-07-01 addition is a lower-level self-sensing medium contract:
+
+`tools/graph_wave_v3_self_sensing_medium_contract_test.cpp`
+
+It keeps the field in fixed SoA buffers and asks a narrower question: can the
+system state itself (`psi/chi/tau/aperture`) select where heavy physics should
+run, without labels, token ids, SQL-like candidate tables, trigonometric readout,
+or a separate scoring layer?
+
 ## Key Result
 
 1M stream, adaptive aperture, no trigonometric gate:
@@ -59,6 +69,38 @@ CONTRACT RESULT: 8 / 8 PASS
 Interpretation: the system keeps synchronous physics, reduces heavy edge-flow
 interactions by about 36.9%, and does not one-sidedly clip signed phase current.
 
+Lower-level self-sensing medium, 1M stream:
+
+```text
+full:
+  active_edges=1.000
+  psi compression=2.04x
+  chi compression=2.24x
+  same/cross psi=5.85 chi=6.27
+
+self-sensing:
+  active_edges=0.572
+  psi compression=1.72x
+  chi compression=2.03x
+  internal support separation: psi=5.22 chi=9.24
+
+phase audit:
+  skipped current bias=0.006
+  skipped stress bias=0.161
+  skipped edges=107940937
+
+sync:
+  reverse-order sync_error=0
+
+CONTRACT RESULT: 8 / 8 PASS
+```
+
+Interpretation: this does not claim the self-sensing path reproduces the full
+all-edge trajectory. That would be the wrong benchmark. It shows that the medium
+can reduce heavy flow by about 42.8%, keep `psi` readable, make `chi` denser than
+`psi`, and make `chi` separate internal support more strongly than `psi`, while
+the skipped phase current is not one-sidedly clipped.
+
 ## Main Files
 
 - `tools/graph_wave_v3_feeling_gate_contract_test.cpp`
@@ -66,6 +108,13 @@ interactions by about 36.9%, and does not one-sidedly clip signed phase current.
   - Carrier-field phase representation.
   - Adaptive `aperture` gate from fresh local feeling activity.
   - Formal phase audit for signed current/stress clipping.
+
+- `tools/graph_wave_v3_self_sensing_medium_contract_test.cpp`
+  - Lower-level SoA carrier-field medium.
+  - Tests whether `psi/chi/tau/aperture` can carry the active physics window.
+  - Uses canonical physical edge order for synchronous state updates.
+  - Measures support readability inside the field, not trajectory equality to a
+    full all-edge run.
 
 - `tools/graph_wave_synchronous_phase_field_contract_test.cpp`
   - Earlier local `rho/phi` synchronous phase-field contract.
@@ -91,8 +140,10 @@ Run from repo root:
 ```bat
 cmake -S . -B build
 cmake --build build --config Release --target graph_wave_v3_feeling_gate_contract_test
+cmake --build build --config Release --target graph_wave_v3_self_sensing_medium_contract_test
 ctest --test-dir build -C Release -L gnnv3 --output-on-failure
 build\Release\graph_wave_v3_feeling_gate_contract_test.exe 1000000
+build\Release\graph_wave_v3_self_sensing_medium_contract_test.exe 1000000
 ```
 
 Direct MSVC x64 fallback:
@@ -122,6 +173,8 @@ build\tmp_bridge\probe_nonlinear_engine.exe 60000
 |---|---:|---|---|
 | `graph_wave_v3_feeling_gate_contract_test.cpp` | 60k | PASS 8/8 | adaptive carrier gate, no trig |
 | `graph_wave_v3_feeling_gate_contract_test.cpp` | 1M | PASS 8/8 | active pairs 0.631, skipped current bias 0.008 |
+| `graph_wave_v3_self_sensing_medium_contract_test.cpp` | 120k | PASS 8/8 | active edges 0.572, `chi` support sep 10.79 |
+| `graph_wave_v3_self_sensing_medium_contract_test.cpp` | 1M | PASS 8/8 | active edges 0.572, `chi` support sep 9.24 |
 | `graph_wave_synchronous_phase_field_contract_test.cpp` | 60k | PASS 5/5 | sync error 0 |
 | `graph_wave_synchronous_phase_field_contract_test.cpp` | 1M | PASS 5/5 | `psi=2.97x`, `chi=3.61x` in prior run |
 | `graph_wave_dual_feeling_substrate_contract_test.cpp` | 60k | PASS 5/5 | `chi` readout 100% in prior run |
@@ -131,10 +184,10 @@ Current CMake/CTest status:
 
 ```text
 ctest --test-dir build -C Release -L gnnv3 --output-on-failure
-1 / 1 passed
+2 / 2 passed
 
 ctest --test-dir build -C Release --output-on-failure -j 8
-61 / 61 passed
+62 / 62 passed
 ```
 
 ## Important Negative Results
@@ -161,6 +214,7 @@ The strongest GNNv3 direction is:
 - keep phase as a local carrier, not an angle;
 - keep updates synchronous;
 - let `chi/tau` adaptively narrow the active physics window;
+- prefer state-carried self-sensing over external candidate scoring;
 - audit signed current/stress to ensure the gate does not erase one phase side;
 - keep failed probes visible rather than tuning them into fake wins.
 

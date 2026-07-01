@@ -1,6 +1,7 @@
 # GNNv3 RC1 Handoff
 
 Date: 2026-06-28
+Updated: 2026-07-01
 
 This document exists so the next session does not rediscover the same path.
 
@@ -17,6 +18,8 @@ This document exists so the next session does not rediscover the same path.
 - No trigonometric gate/readout in GNNv3 RC1.
 - No half-wave phase clipping such as `max(0, cos(phase))`.
 - No `Vec` projection/readout as the GNNv3 gate primitive.
+- Do not judge a self-sensing path by exact trajectory equality to an all-edge
+  full run; judge whether the field remains readable, bounded and synchronous.
 
 In GNNv3 RC1, phase is carried as a local carrier field. The gate observes local
 current/stress activity between transported carriers. The gate must not interpret
@@ -93,6 +96,16 @@ phase through an external algebraic/trigonometric lens.
      above the bound.
    - Corrected aperture to learn from fresh `drive` only.
 
+8. Self-sensing medium
+   - Added a lower-level fixed-SoA carrier-field contract.
+   - The active heavy-flow window is carried by `psi/chi/tau/aperture`, not by an
+     external candidate table or labels.
+   - The first invalid check compared self-sensing trajectory phase directly to
+     the full all-edge trajectory; that was rejected because it tests copying,
+     not self-sensing.
+   - The accepted check reads internal support separation, compression,
+     skipped-phase bias and reverse-order synchronization.
+
 ## Current Strongest Gate
 
 File:
@@ -120,10 +133,10 @@ Latest CTest status after CMake/CTest production cleanup:
 
 ```text
 ctest --test-dir build -C Release -L gnnv3 --output-on-failure
-1 / 1 passed
+2 / 2 passed
 
 ctest --test-dir build -C Release --output-on-failure -j 8
-61 / 61 passed
+62 / 62 passed
 ```
 
 Meaning:
@@ -133,6 +146,33 @@ Meaning:
 - Signed phase current is not one-sidedly clipped.
 - Field stays bounded.
 - Matched-random control remains much weaker.
+
+Companion lower-level file:
+
+`tools/graph_wave_v3_self_sensing_medium_contract_test.cpp`
+
+Latest 1M result:
+
+```text
+self-sensing:
+  active_edges=0.572
+  psi compression=1.72x
+  chi compression=2.03x
+  internal support separation: psi=5.22 chi=9.24
+  skipped current bias=0.006
+  skipped stress bias=0.161
+  sync_error=0
+
+CONTRACT RESULT: 8 / 8 PASS
+```
+
+Meaning:
+
+- Heavy edge-flow interactions reduced by about 42.8%.
+- `psi` remains readable inside the field (`same/cross=5.22`).
+- `chi` is denser and separates support more strongly (`same/cross=9.24`).
+- The skipped phase load is not one-sidedly clipped.
+- Canonical physical edge order keeps reverse traversal synchronized.
 
 ## Important Rejected Paths
 
@@ -167,8 +207,10 @@ Use CMake / CTest first:
 ```bat
 cmake -S . -B build
 cmake --build build --config Release --target graph_wave_v3_feeling_gate_contract_test
+cmake --build build --config Release --target graph_wave_v3_self_sensing_medium_contract_test
 ctest --test-dir build -C Release -L gnnv3 --output-on-failure
 build\Release\graph_wave_v3_feeling_gate_contract_test.exe 1000000
+build\Release\graph_wave_v3_self_sensing_medium_contract_test.exe 1000000
 ```
 
 Direct `cmd.exe` / MSVC x64 fallback:
@@ -185,7 +227,8 @@ No PowerShell runner is required for the project logic.
 
 1. Keep GNNv3 RC1 separate from GNNv2 production code until the carrier gate is
    stable across more adversarial physics probes.
-2. Add C++-only noise/corruption probes for the carrier gate.
+2. Add C++-only noise/corruption probes for the carrier gate and self-sensing
+   medium.
 3. Add C++-only speed/memory measurements for 10M when RAM is checked first.
 4. Try replacing remaining angle-based older probes only after the carrier-field
    contract remains stable.

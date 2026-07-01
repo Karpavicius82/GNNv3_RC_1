@@ -39,7 +39,7 @@ nothing is fitted.
 
 | path | contents |
 |---|---|
-| [`tools/`](tools/README.md) | substrate core (`graph_wave_substrate.hpp`) + 61 C++ contract tests, including the GNNv3 RC1 feeling-gated carrier-field gate. |
+| [`tools/`](tools/README.md) | substrate core (`graph_wave_substrate.hpp`) + 62 C++ contract tests, including the GNNv3 RC1 feeling-gated carrier-field gate and self-sensing medium contract. |
 | [`research/`](research/README.md) | production studies (scaling engine, decorrelation glue, the Cora benchmark) and honest exploratory probes, including negative results. |
 | [`docs/`](docs/) | architecture, results, physics-only discipline, RC1 report and handoff. |
 
@@ -74,6 +74,7 @@ failed, that is recorded honestly rather than hidden.
 This repository now also contains the GNNv3 RC1 research checkpoint:
 
 - `tools/graph_wave_v3_feeling_gate_contract_test.cpp`
+- `tools/graph_wave_v3_self_sensing_medium_contract_test.cpp`
 - `docs/GNNv3_RC1_REPORT.md`
 - `docs/GNNv3_RC1_HANDOFF.md`
 
@@ -86,10 +87,18 @@ systems for core work, no SQL/database framing, no hidden negative results.
 Latest 1M RC1 result:
 
 ```text
-adaptive feeling-gated:
+adaptive feeling-gated carrier:
   active_pairs=0.631
   psi compression=2.05x
   chi compression=3.56x
+  sync_error=0
+  CONTRACT RESULT: 8 / 8 PASS
+
+self-sensing medium:
+  active_edges=0.572
+  psi compression=1.72x
+  chi compression=2.03x
+  internal support separation: psi=5.22 chi=9.24
   sync_error=0
   CONTRACT RESULT: 8 / 8 PASS
 ```
@@ -97,8 +106,8 @@ adaptive feeling-gated:
 Latest CTest status:
 
 ```text
-ctest --test-dir build -C Release -L gnnv3 --output-on-failure  -> 1 / 1 passed
-ctest --test-dir build -C Release --output-on-failure -j 8      -> 61 / 61 passed
+ctest --test-dir build -C Release -L gnnv3 --output-on-failure  -> 2 / 2 passed
+ctest --test-dir build -C Release --output-on-failure -j 8      -> 62 / 62 passed
 ```
 
 See `docs/GNNv3_RC1_REPORT.md` for commands, test matrix, negative results, and

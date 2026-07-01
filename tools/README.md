@@ -4,8 +4,8 @@
 graph families, the unitary Cayley stepper, the orthonormal-row kernel, the
 eigensolver). Every other file is a **self-contained contract test**: it builds to a
 standalone executable that prints its own invariants and a `RESULT : n / n verified`
-line. The repo currently has **61 C++ contract tests** registered through CTest; the
-GNNv3 RC1 carrier-field gate is labeled `gnnv3`. A contract proves one property
+line. The repo currently has **62 C++ contract tests** registered through CTest; the
+GNNv3 RC1 carrier-field tests are labeled `gnnv3`. A contract proves one property
 exactly, at machine precision.
 
 Build any one (Windows / MSVC, Developer prompt):
@@ -83,3 +83,10 @@ part of the working GNN.
 
 Other: `graph_wave_end_to_end`, `graph_wave_int16_quantization`,
 `graph_wave_physics_necessity`.
+
+## GNNv3 RC1 carrier-field contracts
+
+| file | proves |
+|---|---|
+| `graph_wave_v3_feeling_gate_contract_test` | `chi/tau/aperture` narrow the active local physics window without trigonometric gate/readout; 1M stream passes 8/8 with active pairs 0.631 |
+| `graph_wave_v3_self_sensing_medium_contract_test` | fixed SoA carrier medium can carry its own active heavy-flow window; 1M stream passes 8/8 with active edges 0.572, `psi` support separation 5.22, `chi` support separation 9.24 |
