@@ -81,6 +81,8 @@ The self-sensing medium also reported internal support separation
 `psi=5.22`, `chi=9.24`. This is the key distinction: the system is not judged by
 copying the full all-edge trajectory, but by whether the field itself remains
 readable, bounded, synchronous and phase-balanced while reducing heavy flow.
+Detailed 2026-07-01 local validation is recorded in
+`docs/GNNv3_RC1_VALIDATION_2026-07-01.md`.
 
 ## Summary
 

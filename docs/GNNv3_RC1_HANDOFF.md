@@ -139,6 +139,8 @@ ctest --test-dir build -C Release --output-on-failure -j 8
 62 / 62 passed
 ```
 
+Detailed local validation: `docs/GNNv3_RC1_VALIDATION_2026-07-01.md`.
+
 Meaning:
 
 - Heavy edge-flow interactions reduced by about 36.9%.

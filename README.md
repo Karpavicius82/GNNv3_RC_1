@@ -77,6 +77,7 @@ This repository now also contains the GNNv3 RC1 research checkpoint:
 - `tools/graph_wave_v3_self_sensing_medium_contract_test.cpp`
 - `docs/GNNv3_RC1_REPORT.md`
 - `docs/GNNv3_RC1_HANDOFF.md`
+- `docs/GNNv3_RC1_VALIDATION_2026-07-01.md`
 
 GNNv3 RC1 tests a self-sensing carrier-field substrate where `chi/tau` narrows
 the active physics window. The main gate is C++ only, physics-only, uses no
@@ -112,3 +113,5 @@ ctest --test-dir build -C Release --output-on-failure -j 8      -> 62 / 62 passe
 
 See `docs/GNNv3_RC1_REPORT.md` for commands, test matrix, negative results, and
 architecture notes. Read `docs/GNNv3_RC1_HANDOFF.md` before continuing research.
+The 2026-07-01 local validation is recorded in
+`docs/GNNv3_RC1_VALIDATION_2026-07-01.md`.

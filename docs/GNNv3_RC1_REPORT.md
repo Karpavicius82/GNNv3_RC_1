@@ -190,6 +190,8 @@ ctest --test-dir build -C Release --output-on-failure -j 8
 62 / 62 passed
 ```
 
+Detailed local validation: `docs/GNNv3_RC1_VALIDATION_2026-07-01.md`.
+
 ## Important Negative Results
 
 1. Earlier `max(0, cos(phase))` gate was rejected.
